@@ -174,15 +174,14 @@ filegroup(name = "runtime_debug", srcs = _RUNTIME_BINARIES.values())
 """
 
 def _install_linux(ctx, urls, version, attrs):
+    # The generated SDK targets use x86_64 files; bundled sources are not exposed.
     ctx.report_progress("Downloading and unpacking tarball...")
     ctx.download_and_extract(
         urls["url"],
         sha256 = urls["sha"],
-        output = "unpack",
-        stripPrefix = version,
+        output = "sdk",
+        stripPrefix = version + "/x86_64",
     )
-
-    ctx.symlink("unpack/x86_64/", "sdk")
 
     if ctx.attr.linux_runtime_objcopy:
         attrs["{linux_runtime_targets}"] = _LINUX_RUNTIME_TARGETS.replace(
