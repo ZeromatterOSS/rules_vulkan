@@ -118,6 +118,7 @@ Set `linux_runtime_objcopy` on `vulkan_sdk.toolchain` (or `install_sdk`) to a he
 vulkan_sdk.toolchain(
     name = "vk_sdk",
     version = "1.4.350.1",
+    platform = "linux",
     linux_runtime_objcopy = "@llvm//tools:llvm-objcopy",
 )
 ```
@@ -131,4 +132,5 @@ companions before distributing stripped files. Place each original beside its in
 
 Container assembly owns runtime destinations, loader symlinks, validation manifest paths, and debug
 artifact publication. These runtime targets do not change the SDK's existing compiler or linking targets.
-The runtime option is Linux-only; it does not add stripped runtime targets on macOS or Windows.
+The runtime option is Linux-only. Set `platform = "linux"` to fetch Linux payloads even when
+assembling images on another host OS. Leaving `platform` unset preserves host SDK selection.
