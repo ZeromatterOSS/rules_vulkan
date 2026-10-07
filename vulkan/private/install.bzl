@@ -7,6 +7,15 @@ load(":resolve.bzl", "find_exact", "normalize_os", "normalize_version")
 
 # Shared attributes between install_sdk rule and the module extension tag class.
 INSTALL_ATTRS = {
+    "linux_runtime_objcopy": attr.label(
+        doc = """Optional hermetic objcopy executable for Linux runtime targets.
+
+        When set, exposes vulkan_loader, vulkan_validation, and vulkaninfo with DWARF removed
+        and GNU debuglinks to their original SDK ELFs. Original companions remain available as
+        <target>_original and runtime_debug; runtime contains only the three stripped ELFs.
+        Stripping runs as ordinary build actions, not during SDK installation.
+        """,
+    ),
     "version": attr.string(
         mandatory = True,
         doc = """
@@ -121,6 +130,49 @@ def _exec(ctx, cmd):
         ]))
     return result
 
+_LINUX_RUNTIME_TARGETS = """\
+_LOADER = glob(
+    [
+        "sdk/lib/libvulkan.so.*.*.*",
+        "sdk/lib/VulkanLoader/lib/libvulkan.so.*.*.*",
+    ],
+    allow_empty = True,
+)
+_RUNTIME_BINARIES = {
+    "vulkan_loader": (
+        _LOADER[0] if len(_LOADER) == 1 else
+        fail("Expected exactly one versioned Vulkan loader, got: %s" % _LOADER)
+    ),
+    "vulkan_validation": "sdk/lib/libVkLayer_khronos_validation.so",
+    "vulkaninfo": "sdk/bin/vulkaninfo",
+}
+
+[
+    run_binary(
+        name = name,
+        srcs = [src],
+        outs = [name + "/" + paths.basename(src)],
+        args = [
+            "--strip-debug",
+            "--add-gnu-debuglink=$(location " + src + ")",
+            "$(location " + src + ")",
+            "$@",
+        ],
+        tool = "{runtime_objcopy}",
+        target_compatible_with = ["@platforms//os:linux"],
+    )
+    for name, src in _RUNTIME_BINARIES.items()
+]
+
+[
+    alias(name = name + "_original", actual = src)
+    for name, src in _RUNTIME_BINARIES.items()
+]
+
+filegroup(name = "runtime", srcs = [":" + name for name in _RUNTIME_BINARIES])
+filegroup(name = "runtime_debug", srcs = _RUNTIME_BINARIES.values())
+"""
+
 def _install_linux(ctx, urls, version, attrs):
     ctx.report_progress("Downloading and unpacking tarball...")
     ctx.download_and_extract(
@@ -131,6 +183,12 @@ def _install_linux(ctx, urls, version, attrs):
     )
 
     ctx.symlink("unpack/x86_64/", "sdk")
+
+    if ctx.attr.linux_runtime_objcopy:
+        attrs["{linux_runtime_targets}"] = _LINUX_RUNTIME_TARGETS.replace(
+            "{runtime_objcopy}",
+            str(ctx.attr.linux_runtime_objcopy),
+        )
 
     attrs.update({
         "{os}": "linux",
@@ -324,6 +382,7 @@ def _install_impl(ctx):
         "{sdk_root}": "",
         "{vma_target}": "",
         "{volk_target}": "",
+        "{linux_runtime_targets}": "",
     }
 
     if repo_utils.is_linux(ctx):
