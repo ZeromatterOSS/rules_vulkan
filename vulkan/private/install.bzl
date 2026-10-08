@@ -19,8 +19,7 @@ INSTALL_ATTRS = {
         doc = """Optional hermetic objcopy executable for Linux runtime targets.
 
         When set, exposes vulkan_loader, vulkan_validation, and vulkaninfo with DWARF removed
-        and GNU debuglinks to their original SDK ELFs. Original companions remain available as
-        <target>_original and runtime_debug; runtime contains only the three stripped ELFs.
+        and GNU debuglinks to their original SDK ELFs, available at their existing SDK file labels.
         Stripping runs as ordinary build actions, not during SDK installation.
         """,
     ),
@@ -171,14 +170,6 @@ _RUNTIME_BINARIES = {
     )
     for name, src in _RUNTIME_BINARIES.items()
 ]
-
-[
-    alias(name = name + "_original", actual = src)
-    for name, src in _RUNTIME_BINARIES.items()
-]
-
-filegroup(name = "runtime", srcs = [":" + name for name in _RUNTIME_BINARIES])
-filegroup(name = "runtime_debug", srcs = _RUNTIME_BINARIES.values())
 """
 
 def _install_linux(ctx, urls, version, attrs):
