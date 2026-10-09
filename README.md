@@ -124,12 +124,10 @@ vulkan_sdk.toolchain(
 ```
 
 On Linux the SDK repository exposes `vulkan_loader`, `vulkan_validation`, and `vulkaninfo` as stripped
-runtime files. Standard `run_binary` actions remove DWARF with `--strip-debug` and add GNU debuglinks;
-SDK installation never executes a host `strip` command. The original SDK ELFs remain available at their
-existing `sdk/` file labels. Retain these companions before distributing stripped files. Place each
-original beside its installed runtime under `.debug/<original basename>` to enable GNU debuglink lookup.
+runtime files. Standard `run_binary` actions remove DWARF with `--strip-debug`;
+SDK installation never executes a host `strip` command.
 
-Container assembly owns runtime destinations, loader symlinks, validation manifest paths, and debug
-artifact publication. These runtime targets do not change the SDK's existing compiler or linking targets.
+Container assembly owns runtime destinations, loader symlinks, and validation manifest paths.
+These runtime targets do not change the SDK's existing compiler or linking targets.
 The runtime option is Linux-only. Set `platform = "linux"` to fetch Linux payloads even when
 assembling images on another host OS. Leaving `platform` unset preserves host SDK selection.

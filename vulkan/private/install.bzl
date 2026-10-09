@@ -18,8 +18,7 @@ INSTALL_ATTRS = {
     "linux_runtime_objcopy": attr.label(
         doc = """Optional hermetic objcopy executable for Linux runtime targets.
 
-        When set, exposes vulkan_loader, vulkan_validation, and vulkaninfo with DWARF removed
-        and GNU debuglinks to their original SDK ELFs, available at their existing SDK file labels.
+        When set, exposes vulkan_loader, vulkan_validation, and vulkaninfo with DWARF removed.
         Stripping runs as ordinary build actions, not during SDK installation.
         """,
     ),
@@ -161,7 +160,6 @@ _RUNTIME_BINARIES = {
         outs = [name + "/" + paths.basename(src)],
         args = [
             "--strip-debug",
-            "--add-gnu-debuglink=$(location " + src + ")",
             "$(location " + src + ")",
             "$@",
         ],
