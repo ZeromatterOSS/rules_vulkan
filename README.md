@@ -109,3 +109,25 @@ The project itself is licensed under [`Apache 2.0`](./LICENSE) license.
 > [!NOTE]
 > This project downloads packages from LunarG, please ensure you comply with their license terms.
 
+
+## Stripped Linux runtime files
+
+Set `linux_runtime_objcopy` on `vulkan_sdk.toolchain` (or `install_sdk`) to a hermetic objcopy executable:
+
+```starlark
+vulkan_sdk.toolchain(
+    name = "vk_sdk",
+    version = "1.4.350.1",
+    platform = "linux",
+    linux_runtime_objcopy = "@llvm//tools:llvm-objcopy",
+)
+```
+
+On Linux the SDK repository exposes `vulkan_loader`, `vulkan_validation`, and `vulkaninfo` as stripped
+runtime files. Standard `run_binary` actions remove DWARF with `--strip-debug`;
+SDK installation never executes a host `strip` command.
+
+Container assembly owns runtime destinations, loader symlinks, and validation manifest paths.
+These runtime targets do not change the SDK's existing compiler or linking targets.
+The runtime option is Linux-only. Set `platform = "linux"` to fetch Linux payloads even when
+assembling images on another host OS. Leaving `platform` unset preserves host SDK selection.

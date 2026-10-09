@@ -7,6 +7,21 @@ load(":resolve.bzl", "find_exact", "normalize_os", "normalize_version")
 
 # Shared attributes between install_sdk rule and the module extension tag class.
 INSTALL_ATTRS = {
+    "platform": attr.string(
+        values = ["", "linux"],
+        doc = """SDK platform: empty selects the host, linux selects the Linux x86_64 archive.
+
+        Explicit Linux selection supports packaging Linux runtime files on other hosts
+        without executing SDK installers. It does not register compiler toolchains.
+        """,
+    ),
+    "linux_runtime_objcopy": attr.label(
+        doc = """Optional hermetic objcopy executable for Linux runtime targets.
+
+        When set, exposes vulkan_loader, vulkan_validation, and vulkaninfo with DWARF removed.
+        Stripping runs as ordinary build actions, not during SDK installation.
+        """,
+    ),
     "version": attr.string(
         mandatory = True,
         doc = """
@@ -121,16 +136,55 @@ def _exec(ctx, cmd):
         ]))
     return result
 
+_LINUX_RUNTIME_TARGETS = """\
+_LOADER = glob(
+    [
+        "sdk/lib/libvulkan.so.*.*.*",
+        "sdk/lib/VulkanLoader/lib/libvulkan.so.*.*.*",
+    ],
+    allow_empty = True,
+)
+_RUNTIME_BINARIES = {
+    "vulkan_loader": (
+        _LOADER[0] if len(_LOADER) == 1 else
+        fail("Expected exactly one versioned Vulkan loader, got: %s" % _LOADER)
+    ),
+    "vulkan_validation": "sdk/lib/libVkLayer_khronos_validation.so",
+    "vulkaninfo": "sdk/bin/vulkaninfo",
+}
+
+[
+    run_binary(
+        name = name,
+        srcs = [src],
+        outs = [name + "/" + paths.basename(src)],
+        args = [
+            "--strip-debug",
+            "$(location " + src + ")",
+            "$@",
+        ],
+        tool = "{runtime_objcopy}",
+        target_compatible_with = ["@platforms//os:linux"],
+    )
+    for name, src in _RUNTIME_BINARIES.items()
+]
+"""
+
 def _install_linux(ctx, urls, version, attrs):
+    # The generated SDK targets use x86_64 files; bundled sources are not exposed.
     ctx.report_progress("Downloading and unpacking tarball...")
     ctx.download_and_extract(
         urls["url"],
         sha256 = urls["sha"],
-        output = "unpack",
-        stripPrefix = version,
+        output = "sdk",
+        stripPrefix = version + "/x86_64",
     )
 
-    ctx.symlink("unpack/x86_64/", "sdk")
+    if ctx.attr.linux_runtime_objcopy:
+        attrs["{linux_runtime_targets}"] = _LINUX_RUNTIME_TARGETS.replace(
+            "{runtime_objcopy}",
+            str(ctx.attr.linux_runtime_objcopy),
+        )
 
     attrs.update({
         "{os}": "linux",
@@ -313,8 +367,8 @@ def _install_impl(ctx):
         # Fetch URLs for known SDK versions
         urls = find_exact(ctx, version)
 
-    # Fetch URLs for the current platform
-    platform = normalize_os(ctx)
+    # Linux SDK extraction is host-independent; other installers use the host platform.
+    platform = ctx.attr.platform or normalize_os(ctx)
     urls = urls.get(platform, None)
     if not urls:
         fail("Download URLs not found for platform {} and SDK {}".format(platform, version))
@@ -324,9 +378,10 @@ def _install_impl(ctx):
         "{sdk_root}": "",
         "{vma_target}": "",
         "{volk_target}": "",
+        "{linux_runtime_targets}": "",
     }
 
-    if repo_utils.is_linux(ctx):
+    if platform == "linux":
         _install_linux(ctx, urls, version, attrs)
         _add_optional_targets(attrs, [], is_linux = True)
     elif repo_utils.is_darwin(ctx):
@@ -342,13 +397,13 @@ def _install_impl(ctx):
 
     # Generate env.bzl with SDK paths and environment variables to unlock access to validation layers.
     sdk_root = attrs["{sdk_root}"]
-    if repo_utils.is_windows(ctx):
+    if attrs["{os}"] == "windows":
         layer_path = sdk_root + "/Bin"
     else:
         layer_path = sdk_root + "/share/vulkan/explicit_layer.d"
 
     # On macOS, the SDK bundles MoltenVK as the ICD. On Linux and Windows, ICDs come from the system.
-    moltenvk_icd = sdk_root + "/share/vulkan/icd.d/MoltenVK_icd.json" if repo_utils.is_darwin(ctx) else ""
+    moltenvk_icd = sdk_root + "/share/vulkan/icd.d/MoltenVK_icd.json" if attrs["{os}"] == "macos" else ""
 
     ctx.file("env.bzl", content = "\n".join([
         '"""Auto-generated SDK environment."""',

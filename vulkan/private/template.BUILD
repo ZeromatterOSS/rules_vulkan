@@ -1,3 +1,5 @@
+load("@aspect_bazel_lib//lib:run_binary.bzl", "run_binary")  # @unused: used by linux_runtime_targets.
+load("@bazel_skylib//lib:paths.bzl", "paths")  # @unused: used by linux_runtime_targets.
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -62,6 +64,7 @@ cc_library(
         [
             # Linux
             "sdk/lib/libvulkan*.so*",
+            "sdk/lib/VulkanLoader/lib/libvulkan*.so*",
             # macOS
             "sdk/lib/libvulkan*.dylib",
             # Windows
@@ -165,3 +168,6 @@ toolchain(
     toolchain = ":vulkan_sdk_{os}",
     toolchain_type = "@rules_vulkan//vulkan:toolchain_type",
 )
+
+# buildifier: disable=no-effect
+{linux_runtime_targets}
